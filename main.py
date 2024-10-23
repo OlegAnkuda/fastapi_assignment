@@ -1,14 +1,19 @@
-from typing import Annotated
+from typing import Optional
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, PositiveInt, Field
+from fastapi.exceptions import HTTPException
 
 
 class Book(BaseModel):
     title: str = Field(min_length=3)
     author: str = Field(min_length=3)
-    year: PositiveInt | None = Field(gt=1800, lt=2025)
-    isbn: str
+    year: Optional[PositiveInt] = Field(default=None, gt=1800, lt=2025)
+    isbn: str = Field()
 
+class Book_to_patch(Book):
+    title: Optional[str] = Field(default=None, min_length=3)
+    author: Optional[str] = Field(default=None, min_length=3)
+    isbn: Optional[str] = Field(default=None)
 
 # Default dict filling
 books_db = dict([
@@ -28,22 +33,17 @@ async def post_book(book: Book):
     last_book_id = keys_list[-1]
     for book_db in books_db.values():
         if book_db.isbn == book.isbn:
-            break # Need to throw exception
-
+            raise HTTPException(status_code=409, detail=f"The object with isbn={book_db.isbn} is already exists")
     books_db[last_book_id + 1] = book
-    return book
+    raise HTTPException(status_code=201)
 
 
 # Нужен список или вывод поэлементно? С Query параметрами не нравится перебор условий,
 # потом хочу придумать как переделать проще.
-@app.get("/books/")
+@app.get("/books/", response_model=list[Book])
 async def get_book_list(
-        author: Annotated[
-                    str | None, Query(min_length=3)
-                ] = None,
-        year: Annotated[
-                    PositiveInt | None, Query(gt=1800, lt=2025)
-                ] = None,
+        author: Optional[str] = Query(default=None, min_length=3),
+        year: Optional[PositiveInt] = Query(default=None, gt=1800, lt=2025),
 ):
     if author and year == None:
         books_list = list()
@@ -67,26 +67,45 @@ async def get_book_list(
         return list(books_db.values())
 
 
-@app.get("/books/{book_id}")
+@app.get("/books/{book_id}", response_model=Book)
 async def get_book_by_id(book_id: int):
-    try:
-        return books_db[book_id]
-    except Exception:
-        return 0 # Need to throw exception
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404)
+    return book
 
 
 # Надо обновлять по полям отдельно или обновлять всю информацию целиком?
 @app.put("/books/{book_id}")
-async def put_book_by_id(book_id: int, book: Book):
-    try:
-        books_db[book_id] = book
-    except Exception:
-        return 0 # Need to throw exception
+async def put_book_by_id(book_id: int, new_book: Book):
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404)
+    books_db[book_id] = new_book
+    raise HTTPException(status_code=200)
+
+
+@app.patch("/books/{book_id}")
+async def patch_book(book_id: int, book_patched: Book_to_patch):
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404)
+    if book_patched.title:
+        book.title = book_patched.title
+    if book_patched.author:
+            book.author = book_patched.author
+    if book_patched.year:
+        book.year = book_patched.year
+    if book_patched.isbn:
+        book.isbn = book_patched.isbn
+    books_db[book_id] = book
+    raise HTTPException(status_code=200)
 
 
 @app.delete("/books/{book_id}")
 async def delete_book_by_id(book_id: int):
-    try:
-        del books_db[book_id]
-    except Exception:
-        return 0  # Need to throw exception
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404)
+    del books_db[book_id]
+    raise HTTPException(status_code=200)
