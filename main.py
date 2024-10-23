@@ -10,10 +10,12 @@ class Book(BaseModel):
     year: Optional[PositiveInt] = Field(default=None, gt=1800, lt=2025)
     isbn: str = Field()
 
+
 class Book_to_patch(Book):
     title: Optional[str] = Field(default=None, min_length=3)
     author: Optional[str] = Field(default=None, min_length=3)
     isbn: Optional[str] = Field(default=None)
+
 
 # Default dict filling
 books_db = dict([
@@ -26,20 +28,22 @@ books_db = dict([
 app = FastAPI()
 
 
-# Мне не нравится реализация, хочу потом переделать принцип получения id, чтобы заполнять пробелы по ключам в словаре.
 @app.post("/books/")
 async def post_book(book: Book):
-    keys_list = list(books_db.keys())
-    last_book_id = keys_list[-1]
     for book_db in books_db.values():
-        if book_db.isbn == book.isbn:
-            raise HTTPException(status_code=409, detail=f"The object with isbn={book_db.isbn} is already exists")
-    books_db[last_book_id + 1] = book
-    raise HTTPException(status_code=201)
+         if book_db.isbn == book.isbn:
+             raise HTTPException(status_code=409, detail=f"The object with isbn={book_db.isbn} is already exists")
+    keys_list = list(books_db.keys())
+    for i in range(0, len(keys_list)):
+        if i < len(keys_list)-1:
+            if keys_list[i+1] - keys_list[i] != 1:
+                books_db[keys_list[i]+1] = book
+                raise HTTPException(status_code=201)
+        else:
+            books_db[keys_list[i]+1] = book
+            raise HTTPException(status_code=201)
 
 
-# Нужен список или вывод поэлементно? С Query параметрами не нравится перебор условий,
-# потом хочу придумать как переделать проще.
 @app.get("/books/", response_model=list[Book])
 async def get_book_list(
         author: Optional[str] = Query(default=None, min_length=3),
@@ -75,7 +79,6 @@ async def get_book_by_id(book_id: int):
     return book
 
 
-# Надо обновлять по полям отдельно или обновлять всю информацию целиком?
 @app.put("/books/{book_id}")
 async def put_book_by_id(book_id: int, new_book: Book):
     book = books_db.get(book_id)
