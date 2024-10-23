@@ -1,5 +1,6 @@
-from typing import Optional
-from fastapi import FastAPI, Query
+from dataclasses import field
+from typing import Optional, Annotated
+from fastapi import FastAPI, Query, Path
 from pydantic import BaseModel, PositiveInt, Field
 from fastapi.exceptions import HTTPException
 
@@ -72,7 +73,7 @@ async def get_book_list(
 
 
 @app.get("/books/{book_id}", response_model=Book)
-async def get_book_by_id(book_id: int):
+async def get_book_by_id(book_id: Annotated[int, Path(ge=0)]):
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404)
@@ -80,7 +81,10 @@ async def get_book_by_id(book_id: int):
 
 
 @app.put("/books/{book_id}")
-async def put_book_by_id(book_id: int, new_book: Book):
+async def put_book_by_id(
+        book_id: Annotated[int, Path(ge=0)],
+        new_book: Book
+):
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404)
@@ -89,7 +93,10 @@ async def put_book_by_id(book_id: int, new_book: Book):
 
 
 @app.patch("/books/{book_id}")
-async def patch_book(book_id: int, book_patched: Book_to_patch):
+async def patch_book(
+        book_id: Annotated[int, Path(ge=0)],
+        book_patched: Book_to_patch
+):
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404)
@@ -106,7 +113,7 @@ async def patch_book(book_id: int, book_patched: Book_to_patch):
 
 
 @app.delete("/books/{book_id}")
-async def delete_book_by_id(book_id: int):
+async def delete_book_by_id(book_id: Annotated[int, Path(ge=0)]):
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404)
