@@ -1,35 +1,17 @@
-from dataclasses import field
 from typing import Optional, Annotated
-from fastapi import FastAPI, Query, Path
-from pydantic import BaseModel, PositiveInt, Field
+from fastapi import Query, Path, APIRouter
+from pydantic import PositiveInt
 from fastapi.exceptions import HTTPException
+from fastapi.responses import Response
+
+from src.schemas import Book, BookToPatch
+from src.database import books_db
 
 
-class Book(BaseModel):
-    title: str = Field(min_length=3)
-    author: str = Field(min_length=3)
-    year: Optional[PositiveInt] = Field(default=None, gt=1800, lt=2025)
-    isbn: str = Field()
+router = APIRouter()
 
 
-class Book_to_patch(Book):
-    title: Optional[str] = Field(default=None, min_length=3)
-    author: Optional[str] = Field(default=None, min_length=3)
-    isbn: Optional[str] = Field(default=None)
-
-
-# Default dict filling
-books_db = dict([
-    (0, Book(title='New Mexico', author='JessePinkman', year=2004, isbn='13579')),
-    (1, Book(title='AmazingMe', author='MikeTheKiller', year=2004, isbn='24680')),
-    (2, Book(title='Super Thinker', author='JessePinkman', year=2015, isbn='11223'))
-])
-
-
-app = FastAPI()
-
-
-@app.post("/books/")
+@router.post("/books/")
 async def post_book(book: Book):
     for book_db in books_db.values():
          if book_db.isbn == book.isbn:
@@ -39,24 +21,24 @@ async def post_book(book: Book):
         if i < len(keys_list)-1:
             if keys_list[i+1] - keys_list[i] != 1:
                 books_db[keys_list[i]+1] = book
-                raise HTTPException(status_code=201)
+                return Response(status_code=201)
         else:
             books_db[keys_list[i]+1] = book
-            raise HTTPException(status_code=201)
+            return Response(status_code=201)
 
 
-@app.get("/books/", response_model=list[Book])
+@router.get("/books/", response_model=list[Book])
 async def get_book_list(
         author: Optional[str] = Query(default=None, min_length=3),
         year: Optional[PositiveInt] = Query(default=None, gt=1800, lt=2025),
 ):
-    if author and year == None:
+    if author and year is None:
         books_list = list()
         for book in books_db.values():
             if book.author == author:
                 books_list.append(book)
         return books_list
-    elif year and author == None:
+    elif year and author is None:
         books_list = list()
         for book in books_db.values():
             if book.year == year:
@@ -72,7 +54,7 @@ async def get_book_list(
         return list(books_db.values())
 
 
-@app.get("/books/{book_id}", response_model=Book)
+@router.get("/books/{book_id}", response_model=Book)
 async def get_book_by_id(book_id: Annotated[int, Path(ge=0)]):
     book = books_db.get(book_id)
     if not book:
@@ -80,7 +62,7 @@ async def get_book_by_id(book_id: Annotated[int, Path(ge=0)]):
     return book
 
 
-@app.put("/books/{book_id}")
+@router.put("/books/{book_id}")
 async def put_book_by_id(
         book_id: Annotated[int, Path(ge=0)],
         new_book: Book
@@ -89,13 +71,13 @@ async def put_book_by_id(
     if not book:
         raise HTTPException(status_code=404)
     books_db[book_id] = new_book
-    raise HTTPException(status_code=200)
+    return Response(status_code=200)
 
 
-@app.patch("/books/{book_id}")
+@router.patch("/books/{book_id}")
 async def patch_book(
         book_id: Annotated[int, Path(ge=0)],
-        book_patched: Book_to_patch
+        book_patched: BookToPatch
 ):
     book = books_db.get(book_id)
     if not book:
@@ -109,13 +91,13 @@ async def patch_book(
     if book_patched.isbn:
         book.isbn = book_patched.isbn
     books_db[book_id] = book
-    raise HTTPException(status_code=200)
+    return Response(status_code=200)
 
 
-@app.delete("/books/{book_id}")
+@router.delete("/books/{book_id}")
 async def delete_book_by_id(book_id: Annotated[int, Path(ge=0)]):
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404)
     del books_db[book_id]
-    raise HTTPException(status_code=200)
+    return Response(status_code=200)
